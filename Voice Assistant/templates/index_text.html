@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Assistant</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container-fluid p-3 mb-2 bg-light">
+        <h1 class="display-4 text-center">Voice Assistant</h1>
+        <div class="text-center mb-3">
+            <button id="startRecording" class="btn btn-primary btn-lg">Start Recording</button>
+            <button id="stopRecording" class="btn btn-secondary btn-lg" disabled>Stop Recording</button>
+        </div>
+        <div class="container text-center">
+            <div class="card mx-auto mb-3" style="max-width: 600px;">
+              <div class="card-body">
+                <h5 class="card-title">Conversation</h5>
+                <p class="card-text"><strong>User Query:</strong> <span id="user-query" class="text-info"></span></p>
+                <p class="card-text"><strong>LLM Response:</strong> <span id="llm-response" class="text-info"></span></p>
+              </div>
+            </div>
+        </div>                  
+    </div>
+    <script>
+        var audioChunks = [];
+        if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+            navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function(stream) {
+                var mediaRecorder = new MediaRecorder(stream);
+                console.log("Media Started !");
+                document.getElementById('startRecording').onclick = function() {
+                mediaRecorder.start();
+                console.log("Recording Started !");
+                document.getElementById('startRecording').disabled = true;
+                document.getElementById('stopRecording').disabled = false;
+                }
+                document.getElementById('stopRecording').onclick = function() {
+                mediaRecorder.stop();
+                console.log("Recording Stopped !");
+                document.getElementById('startRecording').disabled = false;
+                document.getElementById('stopRecording').disabled = true;
+                mediaRecorder.ondataavailable = function(e) {audioChunks.push(e.data);}
+                mediaRecorder.onstop = function(e) {
+                    var audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    var formData = new FormData();
+                    formData.append('audio', audioBlob);
+                    fetch('/upload', { method: 'POST', body: formData })
+                    .then(response => response.blob())
+                    .then(blob => {
+                        var audio = new Audio(URL.createObjectURL(blob));
+                        audio.play();
+                        fetch('/llm_response', { method: 'GET' })
+                        .then(response => response.text())
+                        .then(llmResponse => {
+                            const parsedResponse = JSON.parse(llmResponse);
+                            document.getElementById('user-query').textContent = parsedResponse.user_query;
+                            document.getElementById('llm-response').textContent = parsedResponse.llm_response;
+                        })
+                        .catch(error => console.error('Error:', error));
+                    })
+                    .catch(error => console.error('Error:', error));
+                    audioChunks = [];
+                }
+                }
+            })
+            .catch(function(err) {
+                console.log('The following getUserMedia error occurred: ' + err);
+            });
+        }
+    </script>
+</body>
+</html>
